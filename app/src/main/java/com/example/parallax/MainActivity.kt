@@ -13,11 +13,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
@@ -74,11 +76,14 @@ class MainActivity : ComponentActivity() {
 fun Content(content: List<Pair<String, Int>>) {
     val density = Resources.getSystem().displayMetrics.density
     val screenWidth = LocalConfiguration.current.screenWidthDp
+    val screenHeigth = LocalConfiguration.current.screenHeightDp
     val widthInPixels = density * screenWidth
+    val heigthInPixels = density * screenHeigth
 
     Surface(color = Color.Gray) {
         Column {
             Horizontal(content, widthInPixels)
+            Vertical(content, heigthInPixels)
         }
     }
 }
@@ -105,8 +110,6 @@ fun Horizontal(content: List<Pair<String, Int>>, widthInPixels: Float) {
             ) {
                 var parallaxOffset by rememberSaveable { mutableFloatStateOf(0f) }
 
-                if (it.first == "Onion") Log.e("parallaxOffset", parallaxOffset.toString())
-
                 Image(
                     painter = painterResource(it.second),
                     contentDescription = null,
@@ -114,6 +117,59 @@ fun Horizontal(content: List<Pair<String, Int>>, widthInPixels: Float) {
                         parallaxOffset = coordinates.positionInRoot().x / widthInPixels
                     },
                     alignment = BiasAlignment(parallaxOffset, 0f),
+                    contentScale = object : ContentScale {
+                        override fun computeScaleFactor(srcSize: Size, dstSize: Size) =
+                            ScaleFactor(1.4f, 1.4f)
+                    },
+                )
+                Text(
+                    text = it.first,
+                    textAlign = TextAlign.Center,
+                    fontSize = 48.sp,
+                    color = Color.White,
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        shadow = Shadow(
+                            color = Color.Black,
+                            offset = Offset(8f, 0f),
+                            blurRadius = 12f
+                        )
+                    ),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun Vertical(content: List<Pair<String, Int>>, heightInPixels: Float) {
+    val scrollState = rememberScrollState()
+
+    Column (
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 8.dp, end = 8.dp)
+            .verticalScroll(scrollState),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        content.forEach {
+            Box(
+                modifier = Modifier
+                    .height(256.dp)
+                    .shadow(
+                        elevation = 12.dp,
+                        shape = RoundedCornerShape(12.dp)
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                var parallaxOffset by rememberSaveable { mutableFloatStateOf(0f) }
+
+                Image(
+                    painter = painterResource(it.second),
+                    contentDescription = null,
+                    modifier = Modifier.onGloballyPositioned { coordinates ->
+                        parallaxOffset = coordinates.positionInRoot().y / heightInPixels
+                    },
+                    alignment = BiasAlignment(0f, parallaxOffset),
                     contentScale = object : ContentScale {
                         override fun computeScaleFactor(srcSize: Size, dstSize: Size) =
                             ScaleFactor(1.4f, 1.4f)
