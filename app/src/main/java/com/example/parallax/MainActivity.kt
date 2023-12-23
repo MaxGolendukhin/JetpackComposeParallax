@@ -50,13 +50,15 @@ import com.example.parallax.ui.theme.ParallaxTheme
 import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
+    val density = Resources.getSystem().displayMetrics.density
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             ParallaxTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = Color.Gray
+                    color = MaterialTheme.colorScheme.background
                 ) {
                     val images = listOf(R.drawable.apple, R.drawable.bananas, R.drawable.onion,
                         R.drawable.pears, R.drawable.oranges, R.drawable.tomatoes)
@@ -70,13 +72,19 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun Content(content: List<Pair<String, Int>>) {
-    Column {
-        Horizontal(content)
+    val density = Resources.getSystem().displayMetrics.density
+    val screenWidth = LocalConfiguration.current.screenWidthDp
+    val widthInPixels = density * screenWidth
+
+    Surface(color = Color.Gray) {
+        Column {
+            Horizontal(content, widthInPixels)
+        }
     }
 }
 
 @Composable
-fun Horizontal(content: List<Pair<String, Int>>) {
+fun Horizontal(content: List<Pair<String, Int>>, widthInPixels: Float) {
     val scrollState = rememberScrollState()
 
     Row (
@@ -95,9 +103,17 @@ fun Horizontal(content: List<Pair<String, Int>>) {
                     ),
                 contentAlignment = Alignment.Center,
             ) {
+                var parallaxOffset by rememberSaveable { mutableFloatStateOf(0f) }
+
+                if (it.first == "Onion") Log.e("parallaxOffset", parallaxOffset.toString())
+
                 Image(
                     painter = painterResource(it.second),
                     contentDescription = null,
+                    modifier = Modifier.onGloballyPositioned { coordinates ->
+                        parallaxOffset = coordinates.positionInRoot().x / widthInPixels
+                    },
+                    alignment = BiasAlignment(parallaxOffset, 0f),
                     contentScale = object : ContentScale {
                         override fun computeScaleFactor(srcSize: Size, dstSize: Size) =
                             ScaleFactor(1.4f, 1.4f)
