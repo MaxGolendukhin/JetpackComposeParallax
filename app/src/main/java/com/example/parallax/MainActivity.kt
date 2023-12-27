@@ -1,12 +1,14 @@
 package com.example.parallax
 
 import android.content.res.Resources
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,13 +23,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -45,17 +45,38 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.parallax.ui.theme.ParallaxTheme
-import kotlin.math.roundToInt
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import androidx.compose.runtime.collectAsState
+import kotlin.math.abs
 
 class MainActivity : ComponentActivity() {
     val density = Resources.getSystem().displayMetrics.density
 
+    private lateinit var sensorManager: SensorManager
+    private var sensor: Sensor? = null
+    private lateinit var gyroscopeEventListener: SensorEventListener
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val gyroscopeX = MutableStateFlow(0f)
+
+        sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
+        sensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+        gyroscopeEventListener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent?) {
+                event?.let {
+                    if (abs(it.values[0]) < .2f && abs(it.values[1]) < 0.3f)
+                        gyroscopeX.value = it.values[0]
+                }
+            }
+
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) { }
+        }
+
         setContent {
             ParallaxTheme {
                 Surface(
@@ -65,15 +86,31 @@ class MainActivity : ComponentActivity() {
                     val images = listOf(R.drawable.apple, R.drawable.bananas, R.drawable.onion,
                         R.drawable.pears, R.drawable.oranges, R.drawable.tomatoes)
                     val names = listOf("Apple", "Bananas", "Onion", "Pears", "Oranges", "Tomatoes")
-                    Content(names.zip(images))
+                    Content(names.zip(images), gyroscopeX)
                 }
             }
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+        sensor?.let {
+            sensorManager.registerListener(
+                gyroscopeEventListener,
+                it,
+                SensorManager.SENSOR_DELAY_FASTEST,
+            )
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        sensorManager.unregisterListener(gyroscopeEventListener)
+    }
 }
 
 @Composable
-fun Content(content: List<Pair<String, Int>>) {
+fun Content(content: List<Pair<String, Int>>, gyroscopeX: StateFlow<Float>) {
     val density = Resources.getSystem().displayMetrics.density
     val screenWidth = LocalConfiguration.current.screenWidthDp
     val screenHeigth = LocalConfiguration.current.screenHeightDp
@@ -83,7 +120,7 @@ fun Content(content: List<Pair<String, Int>>) {
     Surface(color = Color.Gray) {
         Column {
             Horizontal(content, widthInPixels)
-            Vertical(content, heigthInPixels)
+            Vertical(content, heigthInPixels, gyroscopeX)
         }
     }
 }
@@ -141,8 +178,13 @@ fun Horizontal(content: List<Pair<String, Int>>, widthInPixels: Float) {
 }
 
 @Composable
-fun Vertical(content: List<Pair<String, Int>>, heightInPixels: Float) {
+fun Vertical(
+    content: List<Pair<String, Int>>,
+    heightInPixels: Float,
+    gyroscopeX: StateFlow<Float>,
+) {
     val scrollState = rememberScrollState()
+    val axisX = gyroscopeX.collectAsState()
 
     Column (
         modifier = Modifier
@@ -169,7 +211,7 @@ fun Vertical(content: List<Pair<String, Int>>, heightInPixels: Float) {
                     modifier = Modifier.onGloballyPositioned { coordinates ->
                         parallaxOffset = coordinates.positionInRoot().y / heightInPixels
                     },
-                    alignment = BiasAlignment(0f, parallaxOffset),
+                    alignment = BiasAlignment(axisX.value, parallaxOffset),
                     contentScale = object : ContentScale {
                         override fun computeScaleFactor(srcSize: Size, dstSize: Size) =
                             ScaleFactor(1.4f, 1.4f)
